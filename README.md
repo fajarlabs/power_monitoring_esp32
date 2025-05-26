@@ -2,8 +2,6 @@
 
 Firmware ini dirancang untuk mikrokontroler **ESP32** yang berfungsi sebagai sistem pemantau daya listrik berbasis **Wi-Fi** dan terintegrasi dengan **Telegram Bot** sebagai media notifikasi otomatis.
 
-![ESP32 Power Monitoring](https://github.com/fajarlabs/power_monitoring_configurator/blob/master/pictures/powermonitoring.png)
-
 ---
 
 ## 📡 Fitur Utama
@@ -58,19 +56,19 @@ Firmware ini dirancang untuk mikrokontroler **ESP32** yang berfungsi sebagai sis
 ---
 
 ## 📁 Struktur Proyek
-esp32_power_monitoring/
-├── main/
-│ ├── app_main.c
-│ ├── wifi_manager.c
-│ ├── telegram_bot.c
-│ └── power_monitor.c
-├── components/
-│ └── ...
-├── sdkconfig
-├── README.md
-└── ...
-
-
+esp32_power_monitoring/<br />
+├── main/<br />
+│ ├── app_main.c<br />
+│ ├── wifi_manager.c<br />
+│ ├── telegram_bot.c<br />
+│ └── power_monitor.c<br />
+├── components/<br />
+│ └── ...<br />
+├── sdkconfig<br />
+├── README.md<br />
+└── ...<br />
+<br />
+<br />
 ---
 
 ## 📄 Lisensi
