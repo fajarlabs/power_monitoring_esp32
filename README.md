@@ -56,6 +56,7 @@ Firmware ini dirancang untuk mikrokontroler **ESP32** yang berfungsi sebagai sis
 ---
 
 ## 📁 Struktur Proyek
+
 esp32_power_monitoring/<br />
 ├── main/<br />
 │ ├── app_main.c<br />
@@ -69,6 +70,7 @@ esp32_power_monitoring/<br />
 └── ...<br />
 <br />
 <br />
+
 ---
 
 ## 📄 Lisensi
