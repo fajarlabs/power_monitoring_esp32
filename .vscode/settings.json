@@ -1,0 +1,16 @@
+{
+  "C_Cpp.intelliSenseEngine": "default",
+  "idf.espIdfPathWin": "C:\\Users\\fajar\\esp\\v5.4.1\\esp-idf",
+  "idf.toolsPathWin": "C:\\Users\\fajar\\.espressif",
+  "idf.pythonInstallPath": "C:\\Users\\fajar\\.espressif\\tools\\idf-python\\3.11.2\\python.exe",
+  "idf.flashType": "UART",
+  "idf.portWin": "COM6",
+  "files.associations": {
+    "uart.h": "c",
+    "sstream": "c",
+    "regex": "c",
+    "esp_netif.h": "c",
+    "gpio_hal.h": "c",
+    "gpio.h": "c"
+  }
+}
