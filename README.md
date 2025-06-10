@@ -57,25 +57,25 @@ Firmware ini dirancang untuk mikrokontroler **ESP32** yang berfungsi sebagai sis
 
 ## 📁 Struktur Proyek
 
-METERAN_ONLINE/
-├── .devcontainer/
-├── .vscode/
-├── build/
-├── main/
-│   ├── CMakeLists.txt
-│   ├── i2c-lcd.c
-│   ├── i2c-lcd.h
-│   ├── meteran_online.c
-│   ├── pzem004tv3.c
-│   ├── pzem004tv3.h
-│   └── telegram_root_cert.h
-├── pictures/
-├── CMakeLists.txt
-├── pytest_hello_world.py
-├── README.md
-├── sdkconfig
-├── sdkconfig.ci
-└── sdkconfig.old
+METERAN_ONLINE/<br />
+├── .devcontainer/<br />
+├── .vscode/<br />
+├── build/<br />
+├── main/<br />
+│   ├── CMakeLists.txt<br />
+│   ├── i2c-lcd.c<br />
+│   ├── i2c-lcd.h<br />
+│   ├── meteran_online.c<br />
+│   ├── pzem004tv3.c<br />
+│   ├── pzem004tv3.h<br />
+│   └── telegram_root_cert.h<br />
+├── pictures/<br />
+├── CMakeLists.txt<br />
+├── pytest_hello_world.py<br />
+├── README.md<br />
+├── sdkconfig<br />
+├── sdkconfig.ci<br />
+└── sdkconfig.old<br />
 
 <br />
 
