@@ -57,18 +57,30 @@ Firmware ini dirancang untuk mikrokontroler **ESP32** yang berfungsi sebagai sis
 
 ## 📁 Struktur Proyek
 
-esp32_power_monitoring/<br />
-├── main/<br />
-│ ├── app_main.c<br />
-│ ├── wifi_manager.c<br />
-│ ├── telegram_bot.c<br />
-│ └── power_monitor.c<br />
-├── components/<br />
-│ └── ...<br />
-├── sdkconfig<br />
-├── README.md<br />
-└── ...<br />
-<br />
+    <h2>METERAN_ONLINE</h2>
+    <ul>
+        <li class="folder">.devcontainer/</li>
+        <li class="folder">.vscode/</li>
+        <li class="folder">build/</li>
+        <li class="folder">main/
+            <ul>
+                <li class="file">CMakeLists.txt</li>
+                <li class="file">i2c-lcd.c</li>
+                <li class="file">i2c-lcd.h</li>
+                <li class="file">meteran_online.c</li>
+                <li class="file">pzem004tv3.c</li>
+                <li class="file">pzem004tv3.h</li>
+                <li class="file">telegram_root_cert.h</li>
+            </ul>
+        </li>
+        <li class="folder">pictures/</li>
+        <li class="file">CMakeLists.txt</li>
+        <li class="file">pytest_hello_world.py</li>
+        <li class="file">README.md</li>
+        <li class="file">sdkconfig</li>
+        <li class="file">sdkconfig.ci</li>
+        <li class="file">sdkconfig.old</li>
+    </ul>
 <br />
 
 ---
