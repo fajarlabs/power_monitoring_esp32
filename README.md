@@ -57,30 +57,26 @@ Firmware ini dirancang untuk mikrokontroler **ESP32** yang berfungsi sebagai sis
 
 ## 📁 Struktur Proyek
 
-    <h2>METERAN_ONLINE</h2>
-    <ul>
-        <li class="folder">.devcontainer/</li>
-        <li class="folder">.vscode/</li>
-        <li class="folder">build/</li>
-        <li class="folder">main/
-            <ul>
-                <li class="file">CMakeLists.txt</li>
-                <li class="file">i2c-lcd.c</li>
-                <li class="file">i2c-lcd.h</li>
-                <li class="file">meteran_online.c</li>
-                <li class="file">pzem004tv3.c</li>
-                <li class="file">pzem004tv3.h</li>
-                <li class="file">telegram_root_cert.h</li>
-            </ul>
-        </li>
-        <li class="folder">pictures/</li>
-        <li class="file">CMakeLists.txt</li>
-        <li class="file">pytest_hello_world.py</li>
-        <li class="file">README.md</li>
-        <li class="file">sdkconfig</li>
-        <li class="file">sdkconfig.ci</li>
-        <li class="file">sdkconfig.old</li>
-    </ul>
+METERAN_ONLINE/
+├── .devcontainer/
+├── .vscode/
+├── build/
+├── main/
+│   ├── CMakeLists.txt
+│   ├── i2c-lcd.c
+│   ├── i2c-lcd.h
+│   ├── meteran_online.c
+│   ├── pzem004tv3.c
+│   ├── pzem004tv3.h
+│   └── telegram_root_cert.h
+├── pictures/
+├── CMakeLists.txt
+├── pytest_hello_world.py
+├── README.md
+├── sdkconfig
+├── sdkconfig.ci
+└── sdkconfig.old
+
 <br />
 
 ---
