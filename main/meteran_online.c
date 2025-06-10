@@ -26,6 +26,8 @@
 #include "telegram_root_cert.h"
 #include "esp_log.h"
 #include "pzem004tv3.h"
+#include "esp_sntp.h"
+#include <time.h>
 
 #define UART_PORT UART_NUM_0      // UART KONFIGURASI
 #define UART_PORT_PZEM UART_NUM_2 // UART PZEM
@@ -58,10 +60,12 @@
 #define KEY_TIME_SAMPLING "time_sampling"
 #define KEY_TDL "tdl"
 #define KEY_CURRENT_WH_USE "current_wh_use"
+#define KEY_HOUR "jam"
+#define KEY_MINUTE "menit"
 /* End Key Configuration */
 
 /* Begin Token Split */
-#define MAX_TOKENS 10    // Maksimal jumlah token
+#define MAX_TOKENS 20    // Maksimal jumlah token
 #define MAX_TOKEN_LEN 64 // Maksimal panjang tiap token
 /* End Token Split */
 
@@ -97,11 +101,14 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
 void wifi_init_sta(void);
 void send_telegram_message(const char *message);
 void PMonTask(void *pz);
+void init_sntp_time();
+void wait_for_time_sync();
+void print_current_time();
 
 /* End Interface function */
 
 bool receiving = false;
-char buffer[20];
+char buffer[50];
 int buf_index = 0;
 
 /* Begin GPIO INPUT */
@@ -109,6 +116,10 @@ static int push_count = 0;
 static bool is_fire = false;
 const int WAIT_PUSH_IN_SECONDS = 2;
 /* End GPIO INPUT */
+
+/* Begin Flag relay test switch ON or OFF */
+static int is_test_relay_on = 0;
+/* End Flag relay test switch ON or OFF*/
 
 /* Begin PZEM sensor */
 /* @brief Set ESP32  Serial Configuration */
@@ -125,13 +136,13 @@ _current_values_t pzValues; /* Measured values */
 /* End PZEM sensor */
 
 /* Begin LCD Lock Text */
-bool is_info_relay = false;
 bool is_reboot = false;
 bool is_beep = false;
 bool is_saldo_lock = false;
 bool is_reset_0_lock = false;
 bool is_relay_on = false;
-bool is_relay_off = false;
+bool is_daily_limit = false;
+bool is_auto_topup = false;
 /* End LCD Lock Text */
 
 /* Begin telegram counting next message */
@@ -212,9 +223,15 @@ void app_main(void)
     gpio_config(&io_conf_33);
     /* End GPIO Output 34 relay*/
 
-    /* Begini init Wi-Fi*/
+    /* Begin init Wi-Fi*/
     wifi_init_sta();
     /* End init Wi-Fi */
+
+    /* Begin Init RTC Internal */
+    init_sntp_time();
+    wait_for_time_sync();
+    print_current_time();
+    /* End Init RTC Internal */
 }
 
 void uart_rx_task(void *arg)
@@ -334,6 +351,8 @@ void login_main(char *route)
                 save_string_to_nvs(KEY_DAILY_LIMIT, tokens[2]);
                 save_string_to_nvs(KEY_TIME_SAMPLING, tokens[3]);
                 save_string_to_nvs(KEY_TDL, tokens[4]);
+                save_string_to_nvs(KEY_HOUR, tokens[5]);
+                save_string_to_nvs(KEY_MINUTE, tokens[6]);
                 ESP_LOGI(TAG, "OK");
             }
             /* End Data Save to NVS */
@@ -356,9 +375,9 @@ void login_main(char *route)
 
                 char last_kwh[10];
                 read_string_from_nvs(KEY_LAST_WH, last_kwh, sizeof(last_kwh));
-                float kwh_float = atof(last_kwh); 
+                float kwh_float = atof(last_kwh);
                 float topup_kwh_float = atof(tokens[1]);
-                float total_wh_float = kwh_float + (topup_kwh_float*1000);
+                float total_wh_float = kwh_float + (topup_kwh_float * 1000);
 
                 char buffer_total_wh[10];
                 sprintf(buffer_total_wh, "%.2f", total_wh_float);
@@ -376,12 +395,13 @@ void login_main(char *route)
         /* Begin Relay ON */
         if (strcmp(route, "11") == 0)
         {
+            is_test_relay_on = 1; // set flag on
             is_relay_on = true;
             gpio_set_level(GPIO_NUM_33, 1); // Set ke HIGH
             // clear LCD
             lcd_clear_row(1);
             // set text
-            char *lcd_text = "Relay ON";
+            char *lcd_text = "Switch ON";
             char buffer_relay[20];
             sprintf(buffer_relay, "%s", lcd_text);
             lcd_put_cur(1, 0);
@@ -392,7 +412,8 @@ void login_main(char *route)
         /* Begin Relay OFF */
         if (strcmp(route, "12") == 0)
         {
-            is_relay_off = true;
+            is_test_relay_on = 2; // set flag off
+            is_relay_on = false;
             gpio_set_level(GPIO_NUM_33, 0); // Set ke LOW
             // clear LCD
             lcd_clear_row(1);
@@ -441,8 +462,8 @@ void login_main(char *route)
         /* Begin Send Normally Relay */
         if (strcmp(route, "15") == 0)
         {
+            is_test_relay_on = 0; // reset
             is_relay_on = false;
-            is_relay_off = false;
             // clear LCD
             lcd_clear_row(1);
             // tunggu proses clear selesai
@@ -489,16 +510,22 @@ void login_main(char *route)
             float pembulatan_kwh = atof(last_wh) / 1000.0;
             float sisa_kwh_rounded = floorf(pembulatan_kwh * 10) / 10;
 
-            char buffer_convert_to_kwh[10];  // pastikan cukup besar
-            sprintf(buffer_convert_to_kwh, "%.1f", sisa_kwh_rounded);  // format 2 digit di belakang koma
+            char buffer_convert_to_kwh[10];                           // pastikan cukup besar
+            sprintf(buffer_convert_to_kwh, "%.1f", sisa_kwh_rounded); // format 2 digit di belakang koma
 
             char sampling_time[10];
             read_string_from_nvs(KEY_TIME_SAMPLING, sampling_time, sizeof(sampling_time));
             char tdl[10];
             read_string_from_nvs(KEY_TDL, tdl, sizeof(tdl));
 
+            char hour_data[10];
+            read_string_from_nvs(KEY_HOUR, hour_data, sizeof(hour_data));
+
+            char minute_data[10];
+            read_string_from_nvs(KEY_MINUTE, minute_data, sizeof(minute_data));
+
             /* Print ESP-LOG */
-            ESP_LOGI(TAG, "<2,%s,%s,%s,%s,%s,%s>", topup_kwh, kwh_minimum, daily_limit, buffer_convert_to_kwh, sampling_time, tdl);
+            ESP_LOGI(TAG, "<2,%s,%s,%s,%s,%s,%s,%s,%s>", topup_kwh, kwh_minimum, daily_limit, buffer_convert_to_kwh, sampling_time, tdl, hour_data, minute_data);
         }
         /* End Pulse KWH */
 
@@ -554,16 +581,33 @@ void save_string_to_nvs(const char *key, const char *value)
 {
     nvs_handle_t handle;
     esp_err_t err = nvs_open("storage", NVS_READWRITE, &handle);
-    if (err == ESP_OK)
+    if (err != ESP_OK)
     {
-        err = nvs_set_str(handle, key, value);
-        if (err == ESP_OK)
-        {
-            nvs_commit(handle);
-        }
-        nvs_close(handle);
+        ESP_LOGE("NVS", "nvs_open gagal: %s", esp_err_to_name(err));
+        return;
     }
+
+    err = nvs_set_str(handle, key, value);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE("NVS", "nvs_set_str gagal: %s", esp_err_to_name(err));
+        nvs_close(handle);
+        return;
+    }
+
+    err = nvs_commit(handle);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE("NVS", "nvs_commit gagal: %s", esp_err_to_name(err));
+    }
+    else
+    {
+        ESP_LOGI("NVS", "Berhasil simpan key %s dengan nilai %s", key, value);
+    }
+
+    nvs_close(handle);
 }
+
 
 void read_string_from_nvs(const char *key, char *out_value, size_t max_len)
 {
@@ -609,7 +653,8 @@ void read_gpio_task(void *arg)
                 if (!is_fire)
                 {
                     is_fire = true;
-                    ESP_LOGI(TAG, "FIRE");
+                    ESP_LOGI(TAG, "Reset Wh");
+                    save_string_to_nvs(KEY_CURRENT_WH_USE, "0");
                 }
             }
             push_count++;
@@ -619,7 +664,7 @@ void read_gpio_task(void *arg)
             push_count = 0; // reset
             is_fire = false;
         }
-        vTaskDelay(pdMS_TO_TICKS(1000)); // delay 500ms
+        vTaskDelay(pdMS_TO_TICKS(50)); // delay 500ms
     }
 }
 
@@ -764,7 +809,8 @@ void PMonTask(void *pz)
         if (is_reboot || is_saldo_lock || is_reset_0_lock)
             continue;
 
-        if (saldo_wh > 0) is_single_message_telegram = false; // reset sekali pesan flag
+        if (saldo_wh > 0)
+            is_single_message_telegram = false; // reset sekali pesan flag
 
         // limit untuk kirim notifikasi
         if ((saldo_wh / 1000) < limit_kwh)
@@ -775,10 +821,18 @@ void PMonTask(void *pz)
                 char info_pulsa[100];
                 if (saldo_wh > 0)
                 {
-                    float pembulatan_kwh = saldo_wh / 1000.0;
-                    float sisa_kwh_rounded = floorf(pembulatan_kwh * 10) / 10;
-                    sprintf(info_pulsa, "Pulsa listrik anda akan segera habis, sisa Kwh:%.1f", sisa_kwh_rounded); // save to kwh
-                    send_telegram_message(info_pulsa);
+                    if (is_daily_limit)
+                    {
+                        sprintf(info_pulsa, "%s", "Anda telah melewati penggunaan batas harian. Silahkan tekan tombol hijau untuk menambah Kwh."); // save to kwh
+                        send_telegram_message(info_pulsa);
+                    }
+                    else
+                    {
+                        float pembulatan_kwh = saldo_wh / 1000.0;
+                        float sisa_kwh_rounded = floorf(pembulatan_kwh * 10) / 10;
+                        sprintf(info_pulsa, "Pulsa listrik anda akan segera habis, sisa Kwh:%.1f", sisa_kwh_rounded); // save to kwh
+                        send_telegram_message(info_pulsa);
+                    }
                 }
                 else
                 {
@@ -791,8 +845,8 @@ void PMonTask(void *pz)
                 }
             }
 
-            count_next_message += 1;
-            
+            count_next_message = count_next_message + 1;
+
             if (count_next_message >= NEXT_SEND_TELEGRAM)
             {
                 count_next_message = 0; // reset
@@ -820,30 +874,72 @@ void PMonTask(void *pz)
         {
 
             // Kurangi saldo
-            if (saldo_wh > 0) {
-                
+            if (saldo_wh > 0)
+            {
+
                 char buffer_current_wh_use[10];
                 read_string_from_nvs(KEY_CURRENT_WH_USE, buffer_current_wh_use, sizeof(buffer_current_wh_use));
                 float current_wh_use = atof(buffer_current_wh_use);
-                current_wh_use += energy_per_detik;
+
+                // tambahkan nilai penggunaan energi disini
+                // data ini akan disimpan sebagai state penggunaan harian
+                current_wh_use = current_wh_use + energy_per_detik;
 
                 char data_daily_limit[10];
                 read_string_from_nvs(KEY_DAILY_LIMIT, data_daily_limit, sizeof(data_daily_limit));
                 float daily_limit = atof(data_daily_limit);
-                if(current_wh_use >= (daily_limit*1000)){
+
+                print_current_time();
+
+                if (current_wh_use >= daily_limit)
+                { // daily limit in Wh
+                    if (is_test_relay_on == 0)
+                        is_relay_on = false; // matikan relay
+
                     char buffer_batas_harian[20];
-                    sprintf(buffer_batas_harian, "%s", "> Batas Harian!");
+                    sprintf(buffer_batas_harian, "%s", ">Batas Harian!");
                     lcd_put_cur(1, 0);
                     lcd_send_string(buffer_batas_harian);
-                    is_relay_off = true; // matikan relay
+
+                    if(!is_daily_limit){
+                        // Save current Wh
+                        sprintf(buffer_current_wh_use, "%.3f", current_wh_use); // save to kwh
+                        save_string_to_nvs(KEY_CURRENT_WH_USE, buffer_current_wh_use);
+
+                        is_daily_limit = true;
+                    }
                 }
+                else
+                {
+                    char buffer_batas_harian[20];
 
-                ESP_LOGI(TAG, "Beban akumulasi : %.2f", current_wh_use);
-                sprintf(buffer_current_wh_use, "%.2f", current_wh_use); // save to kwh
-                save_string_to_nvs(KEY_CURRENT_WH_USE, buffer_current_wh_use);
+                    if (is_relay_on == false)
+                    {
+                        lcd_put_cur(1, 0);
+                        lcd_clear_row(1);
+                        sprintf(buffer_batas_harian, "Wh:");
+                        lcd_send_string(buffer_batas_harian);
+                    }
 
-                saldo_wh -= energy_per_detik;
-            } else
+                    if (is_test_relay_on == 0)
+                        is_relay_on = true; // hidupkan relay
+
+                    // simpan current Wh
+                    saldo_wh = saldo_wh - energy_per_detik;
+                    sprintf(buffer_current_wh_use, "%.3f", current_wh_use); // save to kwh
+                    save_string_to_nvs(KEY_CURRENT_WH_USE, buffer_current_wh_use);
+
+                    ESP_LOGI(TAG, "Beban akumulasi : %.3f Wh", current_wh_use);
+
+                    lcd_put_cur(1, 3);
+                    sprintf(buffer_batas_harian, "%.2f", current_wh_use);
+                    lcd_send_string(buffer_batas_harian);
+
+                    is_daily_limit = false;
+                    is_auto_topup = false;
+                }
+            }
+            else
                 saldo_wh = 0;
 
             // update saldo terbaru
@@ -875,7 +971,7 @@ void PMonTask(void *pz)
             lcd_send_string(buffer_saldo_wh);
 
             lcd_put_cur(0, 12);
-            sprintf(buffer_saldo_wh, "%.1f", daya);
+            sprintf(buffer_saldo_wh, "%.2f", daya);
             lcd_send_string(buffer_saldo_wh);
 
             // cek apakah ada tegangan ?
@@ -898,16 +994,16 @@ void PMonTask(void *pz)
                         0b11111,
                         0b01110,
                         0b00100,
-                        0b00000
-                    };
+                        0b00000};
 
                     lcd_send_cmd(0x40); // CGRAM address for slot 0
-                    for (int i = 0; i < 8; i++) {
+                    for (int i = 0; i < 8; i++)
+                    {
                         lcd_send_data(love_icon[i]);
                     }
 
-                    lcd_put_cur(1, 15);  // Baris 1 (indeks 0), kolom paling kanan (indeks 15)
-                    lcd_send_data(0);    // Tampilkan karakter CGRAM slot 0
+                    lcd_put_cur(1, 15); // Baris 1 (indeks 0), kolom paling kanan (indeks 15)
+                    lcd_send_data(0);   // Tampilkan karakter CGRAM slot 0
                 }
             }
             /* End info KWH */
@@ -915,55 +1011,55 @@ void PMonTask(void *pz)
             // Kontrol relay
             if (saldo_wh > 0)
             {
-                /* Begin Info Relay ON */
-                if (!is_info_relay)
-                {
-                    is_info_relay = true;
-                    lcd_clear_row(1);
-                    char *lcd_text = "Switch ON";
-                    sprintf(buffer, "%s", lcd_text);
-                    lcd_put_cur(1, 0);
-                    lcd_send_string(buffer);
-                }
-                /* End Info Relay ON */
-
                 /* Begin Relay ON */
-                if (is_relay_off || is_relay_on)
+                if (is_test_relay_on == 1)
                 {
+                    gpio_set_level(GPIO_NUM_33, 1);
+                }
+                else if (is_test_relay_on == 2)
+                {
+                    gpio_set_level(GPIO_NUM_33, 0);
                 }
                 else
                 {
-                    gpio_set_level(GPIO_NUM_33, 1);
+                    if (is_relay_on)
+                    {
+                        gpio_set_level(GPIO_NUM_33, 1);
+                    }
+                    else
+                    {
+                        gpio_set_level(GPIO_NUM_33, 0);
+                    }
                 }
                 /* End Relay ON */
             }
             else
             {
-                /* Begin Info Relay OFF */
-                if (is_info_relay)
-                {
-                    is_info_relay = false;
-                    lcd_clear_row(1);
-                    char *lcd_text = "Switch OFF";
-                    sprintf(buffer, "%s", lcd_text);
-                    lcd_put_cur(1, 0);
-                    lcd_send_string(buffer);
-                }
-                /* End Info Relay OFF */
-
                 /* Begin Relay OFF */
-                if (is_relay_off || is_relay_on)
+                if (is_test_relay_on == 1)
                 {
+                    gpio_set_level(GPIO_NUM_33, 1);
+                }
+                else if (is_test_relay_on == 2)
+                {
+                    gpio_set_level(GPIO_NUM_33, 0);
                 }
                 else
                 {
-                    gpio_set_level(GPIO_NUM_33, 0);
+                    if (is_relay_on)
+                    {
+                        gpio_set_level(GPIO_NUM_33, 1);
+                    }
+                    else
+                    {
+                        gpio_set_level(GPIO_NUM_33, 0);
+                    }
                 }
                 /* End Relay OFF */
             }
 
-            ESP_LOGI(TAG, "Stack High Water Mark: %ld Bytes free",
-                     (unsigned long int)uxTaskGetStackHighWaterMark(NULL));
+            // ESP_LOGI(TAG, "Stack High Water Mark: %ld Bytes free",
+            //          (unsigned long int)uxTaskGetStackHighWaterMark(NULL));
         }
         else
         {
@@ -974,4 +1070,75 @@ void PMonTask(void *pz)
     }
 
     vTaskDelete(NULL);
+}
+
+
+void init_sntp_time() {
+    esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
+    esp_sntp_setservername(0, "pool.ntp.org");
+    esp_sntp_init();
+}
+
+void wait_for_time_sync() {
+    time_t now = 0;
+    struct tm timeinfo = { 0 };
+    while (timeinfo.tm_year < (2020 - 1900)) {
+        time(&now);
+        localtime_r(&now, &timeinfo);
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
+    }
+    ESP_LOGI("TIME", "Waktu tersinkronisasi: %s", asctime(&timeinfo));
+}
+
+int test_1 = 0;
+void print_current_time() {
+    // Set timezone ke WIB (UTC+7)
+    setenv("TZ", "WIB-7", 1);
+    tzset();
+
+    time_t now;
+    struct tm timeinfo;
+
+    time(&now); // ambil waktu sekarang (epoch)
+    localtime_r(&now, &timeinfo); // konversi ke format lokal (struct tm)
+
+    // Format waktu ke string
+    char time_str[64];
+    strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", &timeinfo);
+    ESP_LOGI("TIME", "Waktu sekarang: %s WIB", time_str);
+
+    char hour_data[10];
+    read_string_from_nvs(KEY_HOUR, hour_data, sizeof(hour_data));
+    int hour_data_int = atoi(hour_data);
+
+    char minute_data[10];
+    read_string_from_nvs(KEY_MINUTE, minute_data, sizeof(minute_data));
+    int minute_data_int = atoi(minute_data);
+
+    // Deteksi jam 12 malam (00:00)
+    if (timeinfo.tm_hour == hour_data_int && timeinfo.tm_min == minute_data_int) {
+        ESP_LOGW("TIME", "Sudah melewati jam & menit yang telah ditetapkan.");
+
+        char data_daily_limit[10];
+        read_string_from_nvs(KEY_DAILY_LIMIT, data_daily_limit, sizeof(data_daily_limit));
+        float daily_limit = atof(data_daily_limit);
+
+        char last_wh[10];
+        read_string_from_nvs(KEY_LAST_WH, last_wh, sizeof(last_wh));
+        float saldo_wh = atof(last_wh); // masih bentuk Wh, jika diubah Kwh harus dibagi 1000
+
+        char buffer_current_wh_use[10];
+        read_string_from_nvs(KEY_CURRENT_WH_USE, buffer_current_wh_use, sizeof(buffer_current_wh_use));
+        float current_wh_use = atof(buffer_current_wh_use);
+
+        if(saldo_wh > daily_limit && !is_auto_topup){
+            is_auto_topup = true;
+            ESP_LOGI(TAG, "Penambahan Kwh / Auto topup.");
+            current_wh_use = current_wh_use - daily_limit; // mengurangi jumlah kwh pemakaian
+            sprintf(buffer_current_wh_use, "%.3f", current_wh_use); // save to kwh
+            //save_string_to_nvs(KEY_CURRENT_WH_USE, buffer_current_wh_use);
+            save_string_to_nvs(KEY_CURRENT_WH_USE, "0");
+            vTaskDelay(pdMS_TO_TICKS(50)); // delay 500ms
+        }
+    }
 }
